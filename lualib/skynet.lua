@@ -248,7 +248,7 @@ local coroutine_pool = setmetatable({}, { __mode = "kv" })
 local function co_create(f)
 	local co = tremove(coroutine_pool)
 	if co == nil then
-		co = coroutine_create(function(...)
+		co = coroutine.create(function(...)
 			f(...)
 			while true do
 				local session = session_coroutine_id[co]
