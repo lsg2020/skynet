@@ -73,11 +73,9 @@ local function read_handshake(self, upgrade_ops)
         header, method, url = upgrade_ops.header, upgrade_ops.method, upgrade_ops.url
     else
         local tmpline = {}
-        if not tmpline then
-            local header_body = internal.recvheader(self.read, tmpline, "")
-            if not header_body then
-                return 413
-            end
+        local header_body = internal.recvheader(self.read, tmpline, "")
+        if not header_body then
+            return 413
         end
 
         local request = assert(tmpline[1])
