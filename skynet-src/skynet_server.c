@@ -45,6 +45,7 @@ struct skynet_context {
 	struct skynet_module * mod;
 	void * cb_ud;
 	skynet_cb cb;
+	skynet_thread_notify_cb th_notify_cb;
 	struct message_queue *queue;
 	ATOM_POINTER logfile;
 	uint64_t cpu_cost;	// in microsec
@@ -139,6 +140,7 @@ skynet_context_new(const char * name, const char *param) {
 	ctx->instance = inst;
 	ATOM_INIT(&ctx->ref , 2);
 	ctx->cb = NULL;
+	ctx->th_notify_cb = NULL;
 	ctx->cb_ud = NULL;
 	ctx->session_id = 0;
 	ATOM_INIT(&ctx->logfile, (uintptr_t)NULL);
@@ -259,11 +261,11 @@ skynet_isremote(struct skynet_context * ctx, uint32_t handle, int * harbor) {
 }
 
 static void
-dispatch_message(struct skynet_context *ctx, struct skynet_message *msg) {
+dispatch_message(struct skynet_context *ctx, struct skynet_message *msg, int ptype) {
 	assert(ctx->init);
 	CHECKCALLING_BEGIN(ctx)
 	pthread_setspecific(G_NODE.handle_key, (void *)(uintptr_t)(ctx->handle));
-	int type = msg->sz >> MESSAGE_TYPE_SHIFT;
+	int type = (msg->sz >> MESSAGE_TYPE_SHIFT) | ptype;
 	size_t sz = msg->sz & MESSAGE_TYPE_MASK;
 	FILE *f = (FILE *)ATOM_LOAD(&ctx->logfile);
 	if (f) {
@@ -291,7 +293,7 @@ skynet_context_dispatchall(struct skynet_context * ctx) {
 	struct skynet_message msg;
 	struct message_queue *q = ctx->queue;
 	while (!skynet_mq_pop(q,&msg)) {
-		dispatch_message(ctx, &msg);
+		dispatch_message(ctx, &msg, 0);
 	}
 }
 
@@ -314,15 +316,25 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 
 	int i,n=1;
 	struct skynet_message msg;
+	int ptype = 0;
 
 	for (i=0;i<n;i++) {
 		if (skynet_mq_pop(q,&msg)) {
+			if (ptype != 0) {
+				ctx->th_notify_cb(ctx, ctx->cb_ud, 1, n);
+			}
 			skynet_context_release(ctx);
 			return skynet_globalmq_pop();
 		} else if (i==0 && weight >= 0) {
 			n = skynet_mq_length(q);
 			n >>= weight;
 		}
+		
+		if (i == 0 && ctx->th_notify_cb && n > 1) {
+			ptype = PTYPE_TAG_THREAD_NOTIFY;
+			ctx->th_notify_cb(ctx, ctx->cb_ud, 0, n);
+		}
+		
 		int overload = skynet_mq_overload(q);
 		if (overload) {
 			skynet_error(ctx, "May overload, message queue length = %d", overload);
@@ -333,7 +345,7 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 		if (ctx->cb == NULL) {
 			skynet_free(msg.data);
 		} else {
-			dispatch_message(ctx, &msg);
+			dispatch_message(ctx, &msg, ptype);
 		}
 
 		skynet_monitor_trigger(sm, 0,0);
@@ -347,6 +359,10 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 		skynet_globalmq_push(q);
 		q = nq;
 	} 
+
+	if (ptype != 0) {
+		ctx->th_notify_cb(ctx, ctx->cb_ud, 1, n);
+	}
 	skynet_context_release(ctx);
 
 	return q;
@@ -795,6 +811,11 @@ void
 skynet_callback(struct skynet_context * context, void *ud, skynet_cb cb) {
 	context->cb = cb;
 	context->cb_ud = ud;
+}
+
+void 
+skynet_thread_notify_callback(struct skynet_context * context, void *ud, skynet_thread_notify_cb cb) {
+	context->th_notify_cb = cb;
 }
 
 void
