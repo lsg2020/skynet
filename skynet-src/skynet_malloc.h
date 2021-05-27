@@ -3,10 +3,10 @@
 
 #include <stddef.h>
 
-#define skynet_malloc malloc
+//#define skynet_malloc malloc
 #define skynet_calloc calloc
 #define skynet_realloc realloc
-#define skynet_free free
+//#define skynet_free free
 #define skynet_memalign memalign
 #define skynet_aligned_alloc aligned_alloc
 #define skynet_posix_memalign posix_memalign

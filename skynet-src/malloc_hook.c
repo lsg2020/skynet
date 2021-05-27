@@ -236,6 +236,16 @@ skynet_posix_memalign(void **memptr, size_t alignment, size_t size) {
 
 #else
 
+void *
+skynet_malloc(size_t size) {
+	return malloc(size);
+}
+
+void
+skynet_free(void *ptr) {
+	free(ptr);
+}
+
 // for skynet_lalloc use
 #define raw_realloc realloc
 #define raw_free free
