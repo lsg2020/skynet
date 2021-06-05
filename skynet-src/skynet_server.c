@@ -266,6 +266,7 @@ dispatch_message(struct skynet_context *ctx, struct skynet_message *msg, int pty
 	CHECKCALLING_BEGIN(ctx)
 	pthread_setspecific(G_NODE.handle_key, (void *)(uintptr_t)(ctx->handle));
 	int type = (msg->sz >> MESSAGE_TYPE_SHIFT) | ptype;
+
 	size_t sz = msg->sz & MESSAGE_TYPE_MASK;
 	FILE *f = (FILE *)ATOM_LOAD(&ctx->logfile);
 	if (f) {
@@ -351,6 +352,10 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 		skynet_monitor_trigger(sm, 0,0);
 	}
 
+	if (ptype != 0) {
+		ctx->th_notify_cb(ctx, ctx->cb_ud, 1, n);
+	}
+
 	assert(q == ctx->queue);
 	struct message_queue *nq = skynet_globalmq_pop();
 	if (nq) {
@@ -360,9 +365,6 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 		q = nq;
 	} 
 
-	if (ptype != 0) {
-		ctx->th_notify_cb(ctx, ctx->cb_ud, 1, n);
-	}
 	skynet_context_release(ctx);
 
 	return q;
